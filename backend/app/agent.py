@@ -14,10 +14,12 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 model = genai.GenerativeModel("gemini-2.5-flash")
 
-
-def run_agent(messages, depth=0):
+def run_agent(messages, doctor_id=None, depth=0):
     if depth > 5:
         return "Error: Too many tool calls"
+
+    import json
+    from datetime import datetime, timedelta
 
     # 🔥 Dynamic dates
     today = datetime.now().date()
@@ -68,6 +70,9 @@ If user wants to book → return JSON:
   }}
 }}
 
+If user asks about statistics or reports, use "get_stats" tool.
+For get_stats, ALWAYS include "query" argument exactly from user message.
+
 ---
 
 DO NOT explain.
@@ -101,19 +106,29 @@ ONLY output JSON.
         tool_name = data.get("tool")
         args = data.get("args", {})
 
+        # Inject doctor context
+        if tool_name == "get_stats" and doctor_id:
+            args["doctor_id"] = doctor_id
+
         if tool_name not in TOOL_MAP:
-            return "⚠️ Unknown tool requested."
+            print("⚠️ Unknown tool:", tool_name)
+            return "Sorry, I couldn't process that request."
 
         print("TOOL CALLED:", tool_name, args)
 
-        result = TOOL_MAP[tool_name](**args)
+        try:
+            result = TOOL_MAP[tool_name](**args)
+        except Exception as e:
+            print("❌ TOOL ERROR:", e)
+            return "Something went wrong while processing your request."
+
         print("RESULT:", result)
 
         messages.append({"role": "assistant", "content": text})
         messages.append({"role": "tool", "content": json.dumps(result)})
 
         # ✅ SUCCESS FLOW
-        if result.get("status") == "success":
+        if isinstance(result, dict) and result.get("status") == "success":
             event_file = create_event(
                 doctor_id=args["doctor_id"],
                 date=args["date"],
@@ -125,15 +140,15 @@ ONLY output JSON.
             send_email(
                 "test@mail.com",
                 "Appointment Confirmed",
-                f"Appointment booked.\nCalendar file: {event_file}"
+                "Your appointment has been successfully booked."
             )
 
             print("📧 Email sent")
 
-            return f"✅ Appointment booked!\nCalendar file: {event_file}"
+            return "✅ Appointment booked successfully! A confirmation email has been sent."
 
         # ❌ FAILURE FLOW
-        if result.get("status") == "failed":
+        if isinstance(result, dict) and result.get("status") == "failed":
             print("RETRYING: checking availability...")
 
             slots = TOOL_MAP["check_availability"](
@@ -147,7 +162,7 @@ ONLY output JSON.
             )
 
         # 📊 AVAILABILITY FLOW
-        if "available_slots" in result:
+        if isinstance(result, dict) and "available_slots" in result:
             slots = result["available_slots"]
             user_msg = messages[-1]["content"].lower()
 
@@ -156,7 +171,12 @@ ONLY output JSON.
 
             return f"Available slots: {', '.join(slots)}"
 
+        # 📊 STATS FLOW
+        if isinstance(result, dict) and "result" in result:
+            return result["result"]
+
     except Exception as e:
         print("JSON PARSE FAILED:", e)
 
     return text
+

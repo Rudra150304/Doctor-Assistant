@@ -3,40 +3,64 @@ from ..db import SessionLocal
 from ..models import Appointment
 from datetime import datetime, timedelta
 
-
-def get_stats(query: str):
+def get_stats(query: str, doctor_id: int = None):
     db = SessionLocal()
 
     try:
         today = datetime.now().date()
-        yesterday = today - timedelta(days=1)
         tomorrow = today + timedelta(days=1)
+        yesterday = today - timedelta(days=1)
 
-        query = query.lower()
+        query_lower = query.lower()
 
-        if "yesterday" in query:
-            count = db.query(Appointment).filter(
-                Appointment.date == yesterday
-            ).count()
+        query_db = db.query(Appointment)
 
-            return {"result": f"{count} patients visited yesterday"}
+        # 👇 Filter by doctor
+        if doctor_id:
+            query_db = query_db.filter(Appointment.doctor_id == doctor_id)
 
-        elif "today" in query:
-            count = db.query(Appointment).filter(
-                Appointment.date == today
-            ).count()
+        # 📋 Schedule overview (check this FIRST)
+        if "schedule" in query_lower:
+            appts = query_db.filter(Appointment.date == today).all()
 
-            return {"result": f"{count} appointments today"}
+            if not appts:
+                return {"result": "No appointments scheduled for today."}
 
-        elif "tomorrow" in query:
-            count = db.query(Appointment).filter(
-                Appointment.date == tomorrow
-            ).count()
+            schedule = [
+                f"{a.time.strftime('%H:%M')} - {a.patient_name}"
+                for a in appts
+            ]
 
-            return {"result": f"{count} appointments tomorrow"}
+            return {
+                "result": "Today's schedule:\n" + "\n".join(schedule)
+            }
 
-        else:
-            return {"result": "Query not understood"}
+        # 📊 Yesterday
+        if "yesterday" in query_lower:
+            count = query_db.filter(Appointment.date == yesterday).count()
+            return {"result": f"You had {count} patients yesterday."}
+
+        # 📊 Today
+        if "today" in query_lower:
+            count = query_db.filter(Appointment.date == today).count()
+            return {"result": f"You have {count} appointments today."}
+
+        # 📊 Tomorrow
+        if "tomorrow" in query_lower:
+            count = query_db.filter(Appointment.date == tomorrow).count()
+            return {"result": f"You have {count} appointments tomorrow."}
+
+        # 📊 Total
+        if "total" in query_lower:
+            count = query_db.count()
+            return {"result": f"You have {count} total appointments."}
+
+        return {"result": "Sorry, I couldn't understand the request."}
+
+    except Exception as e:
+        print("❌ STATS ERROR:", e)
+        return {"result": "Error fetching statistics."}
 
     finally:
         db.close()
+

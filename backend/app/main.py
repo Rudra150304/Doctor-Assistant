@@ -26,18 +26,28 @@ def root():
 def get_mcp_tools():
     return TOOLS_MCP
 
-
 @app.post("/chat")
 def chat(session_id: str, message: str):
     if session_id not in sessions:
         sessions[session_id] = []
+
+    # 👇 Extract doctor_id
+    doctor_id = None
+    if session_id.startswith("doc_"):
+        try:
+            doctor_id = int(session_id.split("_")[1])
+        except:
+            doctor_id = None
 
     sessions[session_id].append({
         "role": "user",
         "content": message
     })
 
-    response = run_agent(sessions[session_id])
+    response = run_agent(
+        sessions[session_id],
+        doctor_id=doctor_id
+    )
 
     sessions[session_id].append({
         "role": "assistant",
@@ -45,3 +55,4 @@ def chat(session_id: str, message: str):
     })
 
     return {"response": response}
+
