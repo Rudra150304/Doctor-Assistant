@@ -4,7 +4,6 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 import os
 
-# 👇 FORCE absolute path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 env_path = os.path.join(BASE_DIR, ".env")
 

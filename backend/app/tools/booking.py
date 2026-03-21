@@ -1,15 +1,44 @@
-#doctor-assistant/backend/app/tools/booking.py
-from ..logic import book_slot
-from ..db import SessionLocal
+# doctor-assistant/backend/app/tools/booking.py
 
-def book_appointment(doctor_id: int, patient_name: str, date: str, time: str):
+from ..logic import book_slot, AVAILABLE_SLOTS
+from ..db import SessionLocal
+from ..services.calendar_service import create_event
+from ..services.email_service import send_email
+from datetime import datetime
+
+
+def book_appointment(doctor_id: int, patient_name: str, date: str, time: str, patient_email: str = None):
     db = SessionLocal()
 
-    from datetime import datetime
-    date_obj = datetime.strptime(date, "%Y-%m-%d").date()
+    try:
+        if time not in AVAILABLE_SLOTS:
+            return {"status": "failed", "reason": "Invalid time slot"}
 
-    result = book_slot(db, doctor_id, patient_name, date_obj, time)
+        date_obj = datetime.strptime(date, "%Y-%m-%d").date()
 
-    db.close()
+        result = book_slot(db, doctor_id, patient_name, date_obj, time)
 
-    return result
+        if result.get("status") == "success":
+            event_file = create_event(doctor_id, date, time)
+
+            send_email(
+                to_email= patient_email or "test@mail.com",
+                subject="Appointment Confirmed",
+                body=f"Doctor {doctor_id}, Date {date}, Time {time}"
+            )
+
+            return {
+                "status": "success",
+                "doctor_id": doctor_id,
+                "date": date,
+                "time": time,
+                "calendar_file": event_file
+            }
+
+        return result
+
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+    finally:
+        db.close()

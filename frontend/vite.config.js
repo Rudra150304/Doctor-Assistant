@@ -9,6 +9,10 @@ export default defineConfig({
       '/chat': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+      },
+      '/login': {   // ✅ ADD THIS
+        target: 'http://localhost:8000',
+        changeOrigin: true,
       }
     }
   }

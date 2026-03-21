@@ -1,9 +1,10 @@
 //doctor-assistant/frontend/src/components/DoctorView.jsx
 import { useState, useRef, useEffect } from 'react';
 
-const SESSION_ID = "doc_1";
 
-function DoctorView({ onSwitchRole }) {
+function DoctorView({user, onSwitchRole }) {
+  const SESSION_ID = `doc_${user?.doctor_id}`;
+<h1>Dr. {user?.doctor_id}</h1>
   const [messages, setMessages] = useState([
     { role: 'assistant', text: "Hello, Doctor. I can help you manage appointments, check patient records, and more." }
   ]);

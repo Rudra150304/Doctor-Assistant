@@ -1,15 +1,37 @@
-#doctor-assistant/backend/app/services/email_service.py
+# doctor-assistant/backend/app/services/email_service.py
+
+import mailtrap as mt
 import os
-import smtplib
-from email.mime.text import MIMEText
+
+MAILTRAP_TOKEN = os.getenv("MAILTRAP_TOKEN")
+MAILTRAP_INBOX_ID = int(os.getenv("MAILTRAP_INBOX_ID"))
 
 
-def send_email(to_email, subject, body):
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = "test@example.com"
-    msg["To"] = to_email
+def send_email(to_email: str, subject: str, body: str):
+    try:
+        mail = mt.Mail(
+            sender=mt.Address(
+                email="noreply@doctorassistant.com",
+                name="Doctor Assistant"
+            ),
+            to=[mt.Address(email=to_email)],
+            subject=subject,
+            text=body,
+            category="Appointment"
+        )
 
-    with smtplib.SMTP("sandbox.smtp.mailtrap.io", 2525) as server:
-        server.login(os.getenv("MAILTRAP_USER"), os.getenv("MAILTRAP_PASS"))
-        server.send_message(msg)
+        client = mt.MailtrapClient(
+            token=MAILTRAP_TOKEN,
+            sandbox=True,
+            inbox_id=MAILTRAP_INBOX_ID
+        )
+
+        response = client.send(mail)
+
+        print("📧 Mailtrap response:", response)
+
+        return {"status": "sent"}
+
+    except Exception as e:
+        print("❌ Email error:", e)
+        return {"status": "failed", "error": str(e)}

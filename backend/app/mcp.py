@@ -1,36 +1,26 @@
-#doctor-assistant/backend/app/mcp.py
-from pydantic import BaseModel
+# doctor-assistant/backend/app/mcp.py
+
 from typing import Dict
+from .tools.registry import TOOL_MAP
 
 
-class ToolSchema(BaseModel):
-    name: str
-    description: str
-    input_schema: Dict
-
-
-TOOLS_MCP = [
-    ToolSchema(
-        name="check_availability",
-        description="Check available time slots for a doctor",
-        input_schema={
-            "doctor_id": "integer",
-            "date": "string"
+def list_tools():
+    return [
+        {
+            "name": name,
+            "input_schema": {}
         }
-    ),
-    ToolSchema(
-        name="book_appointment",
-        description="Book an appointment",
-        input_schema={
-            "doctor_id": "integer",
-            "patient_name": "string",
-            "date": "string",
-            "time": "string"
-        }
-    ),
-    ToolSchema(
-        name="get_stats",
-        description="Get doctor stats",
-        input_schema={"query": "string"}
-    ),
-]
+        for name in TOOL_MAP.keys()
+    ]
+
+
+def call_tool(tool_name: str, args: Dict):
+    if tool_name not in TOOL_MAP:
+        return {"result": {"status": "error", "message": "Tool not found"}}
+
+    try:
+        result = TOOL_MAP[tool_name](**args)
+        return {"result": result}
+
+    except Exception as e:
+        return {"result": {"status": "error", "message": str(e)}}

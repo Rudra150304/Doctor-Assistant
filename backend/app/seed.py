@@ -6,13 +6,12 @@ from datetime import date, time
 def seed_doctors(db):
     if db.query(Doctor).count() == 0:
         db.add_all([
-            Doctor(name="Dr. Ahuja"),
-            Doctor(name="Dr. Sharma"),
-            Doctor(name="Dr. Mehta"),
-            Doctor(name="Dr. Gupta"),
+            Doctor(name="Dr. Ahuja", password="1234"),
+            Doctor(name="Dr. Sharma", password="1234"),
+            Doctor(name="Dr. Mehta", password="1234"),
+            Doctor(name="Dr. Gupta", password="1234"),
         ])
         db.commit()
-
 
 def seed_appointments(db):
     if db.query(Appointment).count() == 0:
