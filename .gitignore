@@ -1,5 +1,72 @@
+# ========================
+# 🔐 ENV FILES
+# ========================
 .env
-venv/
+.env.*
+*.env
+
+# ========================
+# 🐍 PYTHON (BACKEND)
+# ========================
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+venv/
+.env_venv/
+.venv/
+ENV/
+
+# FastAPI / Uvicorn
+*.log
+
+# ========================
+# 📦 NODE (FRONTEND)
+# ========================
 node_modules/
+dist/
+build/
+
+# Vite
+.vite/
+
+# ========================
+# 🖥️ OS FILES
+# ========================
+.DS_Store
+Thumbs.db
+
+# ========================
+# 🧠 IDE / EDITOR
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ========================
+# 🐳 DOCKER
+# ========================
+docker-compose.override.yml
+
+# ========================
+# 🔑 SECRETS / KEYS
+# ========================
+*.pem
+*.key
+
+# ========================
+# 🧪 TEST / TEMP
+# ========================
+coverage/
+.pytest_cache/
+.cache/
+
+# ========================
+# 📄 MISC
+# ========================
+*.out
+*.err
