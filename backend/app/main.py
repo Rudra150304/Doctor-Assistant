@@ -6,6 +6,7 @@ from .db import Base, engine
 from .seed import run_seed
 from .auth import router as auth_router
 from fastapi.middleware.cors import CORSMiddleware
+from .notifications import get_notifications
 
 app = FastAPI()
 app.include_router(auth_router)
@@ -24,6 +25,10 @@ sessions = {}
 @app.on_event("startup")
 def startup():
     run_seed()
+
+@app.get("/notifications/{doctor_id}")
+def fetch_notifications(doctor_id: int):
+    return get_notifications(doctor_id)
 
 @app.post("/chat")
 def chat(session_id: str, message: str, name: str = None, email: str = None):

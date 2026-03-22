@@ -2,13 +2,21 @@
 
 import mailtrap as mt
 import os
+from dotenv import load_dotenv
 
-MAILTRAP_TOKEN = os.getenv("MAILTRAP_TOKEN")
-MAILTRAP_INBOX_ID = int(os.getenv("MAILTRAP_INBOX_ID"))
+load_dotenv()
 
 
 def send_email(to_email: str, subject: str, body: str):
     try:
+        MAILTRAP_TOKEN = os.getenv("MAILTRAP_TOKEN")
+        MAILTRAP_INBOX_ID = os.getenv("MAILTRAP_INBOX_ID")
+
+        if not MAILTRAP_TOKEN or not MAILTRAP_INBOX_ID:
+            raise ValueError("Mailtrap env variables not set")
+
+        MAILTRAP_INBOX_ID = int(MAILTRAP_INBOX_ID)
+
         mail = mt.Mail(
             sender=mt.Address(
                 email="noreply@doctorassistant.com",

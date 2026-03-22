@@ -1,24 +1,48 @@
 //doctor-assistant/frontend/src/components/DoctorView.jsx
 import { useState, useRef, useEffect } from 'react';
 
-
-function DoctorView({user, onSwitchRole }) {
+function DoctorView({ user, onSwitchRole }) {
   const SESSION_ID = `doc_${user?.doctor_id}`;
-<h1>Dr. {user?.doctor_id}</h1>
+
   const [messages, setMessages] = useState([
     { role: 'assistant', text: "Hello, Doctor. I can help you manage appointments, check patient records, and more." }
   ]);
+
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const endRef = useRef(null);
 
+  // 🔥 Chat scroll
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // 🔥 Notifications polling (NEW)
+  useEffect(() => {
+    if (!user?.doctor_id) return;
+
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch(`/notifications/${user.doctor_id}`);
+        const data = await res.json();
+
+        setNotifications(data.notifications || []);
+      } catch (err) {
+        console.error("Notification error:", err);
+      }
+    };
+
+    fetchNotifications();
+
+    const interval = setInterval(fetchNotifications, 5000);
+
+    return () => clearInterval(interval);
+  }, [user]);
+
   const sendMessage = async (text) => {
     if (!text.trim()) return;
+
     setMessages(prev => [...prev, { role: 'user', text }]);
     setInputValue('');
     setIsTyping(true);
@@ -27,57 +51,72 @@ function DoctorView({user, onSwitchRole }) {
       const url = new URL('/chat', window.location.origin);
       url.searchParams.append('session_id', SESSION_ID);
       url.searchParams.append('message', text);
+
       const res = await fetch(url, { method: 'POST' });
       if (!res.ok) throw new Error('Network error');
+
       const data = await res.json();
+
       setMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
-      if (data.response.includes("appointments")) {
-        setNotifications(prev => [{ text: "📊 " + data.response, time: new Date().toLocaleTimeString() },...prev]);
-      }
+
     } catch {
-      setMessages(prev => [...prev, { role: 'system', text: 'Could not reach the backend server.' }]);
+      setMessages(prev => [...prev, {
+        role: 'system',
+        text: 'Could not reach the backend server.'
+      }]);
     } finally {
       setIsTyping(false);
     }
   };
 
-  const handleSubmit = (e) => { e.preventDefault(); sendMessage(inputValue); };
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    sendMessage(inputValue);
+  };
+
   const quickMessage = (msg) => sendMessage(msg);
 
   const quickActions = [
     { label: "📊 Today's Appointments", msg: "How many appointments today?" },
-    { label: "👥 Pending Patients", msg: "How many patients are pending today?" },
-    { label: "📋 Schedule Overview", msg: "Give me today's schedule overview." },
+    { label: "👥 Patients Yesterday", msg: "How many patients yesterday?" },
+    { label: "📋 Today's Schedule", msg: "Show today's schedule" },
   ];
 
   return (
     <div className="view-container doctor-view">
+
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="role-badge doctor-badge">🩺</div>
           <div>
             <h2>Doctor Panel</h2>
-            <p className="role-subtitle">Physician Dashboard</p>
+            <p className="role-subtitle">Dr. {user?.doctor_id}</p>
           </div>
         </div>
 
+        {/* Quick Actions */}
         <section className="quick-actions">
           <h3>Quick Actions</h3>
           <div className="actions-list">
             {quickActions.map((action, i) => (
-              <button key={i} className="action-button" onClick={() => quickMessage(action.msg)}>
+              <button
+                key={i}
+                className="action-button"
+                onClick={() => quickMessage(action.msg)}
+              >
                 {action.label}
               </button>
             ))}
           </div>
         </section>
 
+        {/* 🔥 Notifications */}
         <section className="notifications-panel">
-          <h3>Recent Responses</h3>
+          <h3>Notifications</h3>
           <div className="notifications-list">
             {notifications.length === 0 ? (
-              <p className="no-notif">No responses yet</p>
+              <p className="no-notif">No notifications yet</p>
             ) : (
               notifications.slice(0, 5).map((n, i) => (
                 <div key={i} className="notif-card doctor-notif">
@@ -90,7 +129,7 @@ function DoctorView({user, onSwitchRole }) {
         </section>
 
         <button className="switch-role-btn" onClick={onSwitchRole}>
-          ⇄ Switch to Patient View
+          ⇄ Switch Role
         </button>
       </aside>
 
@@ -115,6 +154,7 @@ function DoctorView({user, onSwitchRole }) {
               </div>
             </div>
           ))}
+
           {isTyping && (
             <div className="msg-wrapper assistant">
               <div className="msg-bubble typing">
@@ -122,21 +162,27 @@ function DoctorView({user, onSwitchRole }) {
               </div>
             </div>
           )}
+
           <div ref={endRef} />
         </div>
 
+        {/* Input */}
         <form className="input-area" onSubmit={handleSubmit}>
           <input
             className="chat-input"
             type="text"
             placeholder="Ask about appointments, patients, schedules..."
             value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
+            onChange={(e) => setInputValue(e.target.value)}
             disabled={isTyping}
           />
-          <button type="submit" className="send-btn doctor-send" disabled={!inputValue.trim() || isTyping}>
+
+          <button
+            type="submit"
+            className="send-btn doctor-send"
+            disabled={!inputValue.trim() || isTyping}
+          >
             Send
-            <svg viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
         </form>
       </main>

@@ -5,7 +5,7 @@ from ..db import SessionLocal
 from ..services.calendar_service import create_event
 from ..services.email_service import send_email
 from datetime import datetime
-
+from ..notifications import add_notification
 
 def book_appointment(doctor_id: int, patient_name: str, date: str, time: str, patient_email: str = None):
     db = SessionLocal()
@@ -25,6 +25,11 @@ def book_appointment(doctor_id: int, patient_name: str, date: str, time: str, pa
                 to_email= patient_email or "test@mail.com",
                 subject="Appointment Confirmed",
                 body=f"Doctor {doctor_id}, Date {date}, Time {time}"
+            )
+
+            add_notification(
+                doctor_id,
+                f"🆕 Appointment at {time} with {patient_name}"
             )
 
             return {
