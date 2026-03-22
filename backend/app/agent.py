@@ -1,5 +1,4 @@
 # doctor-assistant/backend/app/agent.py
-
 import json
 import os
 import re
@@ -24,7 +23,6 @@ def safe_parse_json(text):
 
         text = text.replace("json", "").strip()
 
-        # ✅ Extract FIRST JSON only (prevents multi-json crash)
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             return json.loads(match.group())
@@ -48,7 +46,7 @@ def call_openrouter(chat_text):
                 "X-Title": "Doctor Assistant"
             },
             json={
-                "model": "openrouter/free",  # ✅ fast + decent
+                "model": "openrouter/free",
                 "messages": [
                     {"role": "user", "content": chat_text}
                 ]
@@ -177,19 +175,25 @@ Rules:
     if not text:
         return "AI is busy right now. Please try again."
 
-    # ---------------- Parse ----------------
     parsed = safe_parse_json(text)
 
-    # ---------------- Final ----------------
     if "final" in parsed:
         return parsed["final"]
 
     tool_name = parsed.get("tool")
     args = parsed.get("args", {})
 
-    # ---------------- Inject doctor_id ----------------
-    if doctor_id:
-        args["doctor_id"] = doctor_id
+    # ---------------- GLOBAL CONTEXT RECOVERY ----------------
+    availability = context.get("availability", {})
+    last_doctor = context.get("last_doctor_id")
+
+    # Inject doctor_id everywhere if missing
+    if not args.get("doctor_id"):
+        args["doctor_id"] = doctor_id or availability.get("doctor_id") or last_doctor
+
+    # Inject date if missing
+    if not args.get("date"):
+        args["date"] = availability.get("date")
 
     # ---------------- Inject patient ----------------
     if tool_name == "book_appointment":
@@ -226,6 +230,7 @@ Rules:
             "date": args.get("date"),
             "slots": result.get("available_slots", [])
         }
+        session["context"]["last_doctor_id"] = args.get("doctor_id")
 
     # ---------------- Append ----------------
     messages.append({"role": "assistant", "content": json.dumps(parsed)})
