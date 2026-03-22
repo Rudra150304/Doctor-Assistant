@@ -1,42 +1,35 @@
 # doctor-assistant/backend/app/services/email_service.py
-
-import mailtrap as mt
+import smtplib
 import os
+from email.mime.text import MIMEText
 from dotenv import load_dotenv
 
 load_dotenv()
 
-
 def send_email(to_email: str, subject: str, body: str):
     try:
-        MAILTRAP_TOKEN = os.getenv("MAILTRAP_TOKEN")
-        MAILTRAP_INBOX_ID = os.getenv("MAILTRAP_INBOX_ID")
+        SMTP_HOST = "sandbox.smtp.mailtrap.io"
+        SMTP_PORT = 587
 
-        if not MAILTRAP_TOKEN or not MAILTRAP_INBOX_ID:
-            raise ValueError("Mailtrap env variables not set")
+        SMTP_USER = os.getenv("MAILTRAP_USER")
+        SMTP_PASS = os.getenv("MAILTRAP_PASS")
 
-        MAILTRAP_INBOX_ID = int(MAILTRAP_INBOX_ID)
+        if not SMTP_USER or not SMTP_PASS:
+            print("⚠️ SMTP not configured, skipping email")
+            return {"status": "skipped"}
 
-        mail = mt.Mail(
-            sender=mt.Address(
-                email="noreply@doctorassistant.com",
-                name="Doctor Assistant"
-            ),
-            to=[mt.Address(email=to_email)],
-            subject=subject,
-            text=body,
-            category="Appointment"
-        )
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = "noreply@doctorassistant.com"
+        msg["To"] = to_email
 
-        client = mt.MailtrapClient(
-            token=MAILTRAP_TOKEN,
-            sandbox=True,
-            inbox_id=MAILTRAP_INBOX_ID
-        )
+        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASS)
+        server.send_message(msg)
+        server.quit()
 
-        response = client.send(mail)
-
-        print("📧 Mailtrap response:", response)
+        print("📧 Email sent via SMTP")
 
         return {"status": "sent"}
 
