@@ -24,7 +24,7 @@ function DoctorView({ user, onSwitchRole }) {
 
     const fetchNotifications = async () => {
       try {
-        const res = await fetch(`/notifications/${user.doctor_id}`);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/notifications/${user.doctor_id}`);
         const data = await res.json();
 
         setNotifications(data.notifications || []);
@@ -48,7 +48,7 @@ function DoctorView({ user, onSwitchRole }) {
     setIsTyping(true);
 
     try {
-      const url = new URL('/chat', window.location.origin);
+      const url = new URL('/chat', import.meta.env.VITE_API_URL);
       url.searchParams.append('session_id', SESSION_ID);
       url.searchParams.append('message', text);
 

@@ -2,21 +2,5 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: {
-      '/chat': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/login': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/notifications': {   // ✅ added
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      }
-    }
-  }
+  plugins: [react()]
 })

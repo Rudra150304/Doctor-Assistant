@@ -11,7 +11,7 @@ function RoleSelect({ onSelect }) {
   const [email, setEmail] = useState("");
 
   const handleDoctorLogin = async () => {
-    const res = await fetch("/login/doctor", {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/login/doctor`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -32,7 +32,7 @@ function RoleSelect({ onSelect }) {
   };
 
   const handlePatientLogin = async () => {
-    const res = await fetch("/login/patient", {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/login/patient`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
