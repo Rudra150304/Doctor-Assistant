@@ -1,8 +1,9 @@
+#doctor-assistant/backend/app/tools/registry.py
 from .availability import check_availability
 from .booking import book_appointment
 from .stats import get_stats
 from .cancel import cancel_appointment
-from .schedule import get_today_schedule
+from .schedule import get_schedule
 from .next_available_slot import next_available_slot
 
 TOOLS = [
@@ -26,10 +27,11 @@ TOOLS = [
             "properties": {
                 "doctor_id": {"type": "integer"},
                 "patient_name": {"type": "string"},
+                "patient_email": {"type": "string"},
                 "date": {"type": "string"},
                 "time": {"type": "string"}
             },
-            "required": ["doctor_id", "patient_name", "date", "time"]
+            "required": ["doctor_id", "patient_name", "patient_email", "date", "time"]
         }
     },
     {
@@ -49,20 +51,19 @@ TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "doctor_id": {"type": "integer"},
-                "date": {"type": "string"},
-                "time": {"type": "string"}
+                "appointment_id": {"type": "integer"}
             },
-            "required": ["doctor_id", "date", "time"]
+            "required": ["appointment_id"]
         }
     },
     {
-        "name": "get_today_schedule",
-        "description": "Get full list of today's appointments for a doctor",
+        "name": "get_schedule",
+        "description": "Get doctor's schedule for a specific date",
         "parameters": {
             "type": "object",
             "properties": {
-                "doctor_id": {"type": "integer"}
+                "doctor_id": {"type": "integer"},
+                "date": {"type": "string"}
             },
             "required": ["doctor_id"]
         }
@@ -85,7 +86,7 @@ TOOL_MAP = {
     "check_availability": check_availability,
     "book_appointment": book_appointment,
     "cancel_appointment": cancel_appointment,
-    "get_today_schedule": get_today_schedule,
+    "get_schedule": get_schedule,
     "next_available_slot": next_available_slot,
     "get_stats": get_stats
 }

@@ -2,28 +2,33 @@
 
 from ..db import SessionLocal
 from ..models import Appointment
-from datetime import datetime, time
+from datetime import datetime
 
-def get_today_schedule(doctor_id: int):
+def get_schedule(doctor_id: int, date: str = None):
     db = SessionLocal()
 
     try:
-        today = datetime.now().date()
+        if date:
+            date_obj = datetime.strptime(date, "%Y-%m-%d").date()
+        else:
+            date_obj = datetime.now().date()
 
         appts = db.query(Appointment).filter(
             Appointment.doctor_id == doctor_id,
-            Appointment.date == today
+            Appointment.date == date_obj
         ).order_by(Appointment.time).all()
 
         if not appts:
-            return {"result": "No appointments scheduled for today."}
+            return {"result": f"No appointments scheduled for {date_obj}."}
 
         schedule = [
             f"{a.time.strftime('%H:%M')} - {a.patient_name}"
             for a in appts
         ]
 
-        return {"result": "Today's schedule:\n" + "\n".join(schedule)}
+        return {
+            "result": f"Schedule for {date_obj}:\n" + "\n".join(schedule)
+        }
 
     finally:
         db.close()

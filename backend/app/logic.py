@@ -27,7 +27,7 @@ def get_available_slots(db, doctor_id, date):
     return [slot for slot in AVAILABLE_SLOTS if slot not in booked_times]
 
 
-def book_slot(db, doctor_id, patient_name, date, time_str):
+def book_slot(db, doctor_id, patient_name,patient_email,  date, time_str):
     # Convert "HH:MM" → time object
     hour, minute = map(int, time_str.split(":"))
     time_obj = time(hour, minute)
@@ -47,15 +47,18 @@ def book_slot(db, doctor_id, patient_name, date, time_str):
     appt = Appointment(
         doctor_id=doctor_id,
         patient_name=patient_name,
+        patient_email=patient_email,
         date=date,
         time=time_obj
     )
 
     db.add(appt)
     db.commit()
+    db.refresh(appt)
 
     return {
         "status": "success",
+        "appointment_id": appt.id,
         "doctor_id": doctor_id,
         "date": str(date),
         "time": time_str

@@ -1,19 +1,69 @@
 # doctor-assistant/backend/app/agent.py
-
 import json
 import os
 from datetime import datetime, timedelta
 
-import google.generativeai as genai
+import requests
 from dotenv import load_dotenv
 
 from .mcp import call_tool, list_tools
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
+# ---------------- SAFE JSON PARSER ----------------
+def safe_parse_json(text):
+    try:
+        if "```" in text:
+            parts = text.split("```")
+            if len(parts) > 1:
+                text = parts[1]
+
+        text = text.replace("json", "").strip()
+        return json.loads(text)
+
+    except Exception:
+        print("⚠️ JSON PARSE FAILED. RAW:", text)
+        return {"final": text}  # fallback
+
+
+# ---------------- OPENROUTER CALL ----------------
+def call_openrouter(chat_text):
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://localhost:5173",
+                "X-Title": "Doctor Assistant"
+            },
+            json={
+                "model": "openrouter/free",  # ✅ STABLE FREE ROUTER
+                "messages": [
+                    {"role": "user", "content": chat_text}
+                ]
+            },
+            timeout=15  # ✅ prevent hanging
+        )
+
+        data = response.json()
+        print("🔍 RAW RESPONSE:", data)
+
+        if "choices" in data:
+            content = data["choices"][0]["message"]["content"]
+            return content.strip() if content else None
+
+        print("❌ API ERROR:", data)
+        return None
+
+    except Exception as e:
+        print("❌ OpenRouter ERROR:", e)
+        return None
+
+
+# ---------------- MAIN AGENT ----------------
 def run_agent(session, doctor_id=None, role=None, depth=0):
     if depth > 5:
         return "Request too complex. Please try again."
@@ -41,7 +91,7 @@ Email: {patient.get("email")}
         [f"- {t['name']}({', '.join(t['input_schema'].keys())})" for t in list_tools()]
     )
 
-    # ---------------- Role Logic (simple if-else) ----------------
+    # ---------------- Role Prompt ----------------
     if role == "doctor":
         base_prompt = f"""
 You are an AI assistant for doctors.
@@ -68,6 +118,7 @@ You are an AI assistant for patients.
 You help with:
 - checking doctor availability
 - booking appointments
+- cancelling appointments using appointment_id
 
 Rules:
 - NEVER ask name/email again if already provided
@@ -97,8 +148,8 @@ Available slots:
 ["09:00","10:00","11:00","12:00","15:00","16:00","17:00"]
 
 Rules:
-1. ALWAYS respond in JSON
-2. Use tools when needed
+1. STRICTLY return valid JSON only.
+2. No explanations outside JSON.
 3. Tool format:
    {{ "tool": "name", "args": {{...}} }}
 4. Final format:
@@ -107,66 +158,68 @@ Rules:
 
     # ---------------- Build Chat ----------------
     chat_text = system_prompt + "\n\n"
+
     for msg in messages:
         chat_text += f"{msg['role']}: {msg['content']}\n"
 
     # ---------------- Call LLM ----------------
-    try:
-        response = model.generate_content(chat_text)
-        text = response.text.strip()
-    except Exception as e:
-        print("❌ GEMINI ERROR:", e)
-        return "AI service temporarily unavailable."
+    text = call_openrouter(chat_text)
 
-    try:
-        if "```" in text:
-            text = text.split("```")[1].replace("json", "").strip()
+    if not text:
+        return "AI is busy right now. Please try again."
 
-        data = json.loads(text)
+    # ---------------- Parse ----------------
+    parsed = safe_parse_json(text)
 
-        # ---------------- Final ----------------
-        if "final" in data:
-            return data["final"]
+    # ---------------- Final ----------------
+    if "final" in parsed:
+        return parsed["final"]
 
-        tool_name = data.get("tool")
-        args = data.get("args", {})
+    tool_name = parsed.get("tool")
+    args = parsed.get("args", {})
 
-        # ---------------- Inject doctor_id ----------------
-        if doctor_id:
-            args["doctor_id"] = doctor_id
+    # ---------------- Inject doctor_id ----------------
+    if doctor_id:
+        args["doctor_id"] = doctor_id
 
-        # ---------------- Inject patient ----------------
-        if tool_name == "book_appointment":
-            patient = context.get("patient", {})
-            args["patient_name"] = patient.get("name", "Unknown")
-            args["patient_email"] = patient.get("email", "test@mail.com")
+    # ---------------- Inject patient ----------------
+    if tool_name == "book_appointment":
+        patient = context.get("patient", {})
+        args["patient_name"] = patient.get("name", "Unknown")
+        args["patient_email"] = patient.get("email", "test@mail.com")
 
-        # ---------------- Safety Rules ----------------
-        if role == "doctor" and tool_name == "book_appointment":
-            return "Doctors cannot book appointments."
+    # ---------------- Inject appointment_id ----------------
+    if tool_name == "cancel_appointment" and "appointment_id" not in args:
+        last_id = context.get("last_appointment_id")
+        if last_id:
+            args["appointment_id"] = last_id
 
-        if tool_name == "book_appointment" and "availability" not in context:
-            return "Please check availability first."
+    # ---------------- Safety ----------------
+    if role == "doctor" and tool_name == "book_appointment":
+        return "Doctors cannot book appointments."
 
-        # ---------------- Call Tool ----------------
-        result = call_tool(tool_name, args).get("result")
+    if tool_name == "book_appointment" and "availability" not in context:
+        return "Please check availability first."
 
-        # ---------------- Update Context ----------------
-        session.setdefault("context", {})
+    # ---------------- Call Tool ----------------
+    result = call_tool(tool_name, args).get("result")
 
-        if tool_name == "check_availability":
-            session["context"]["availability"] = {
-                "doctor_id": args.get("doctor_id"),
-                "date": args.get("date"),
-                "slots": result.get("available_slots", [])
-            }
+    session.setdefault("context", {})
 
-        # ---------------- Append messages ----------------
-        messages.append({"role": "assistant", "content": json.dumps(data)})
-        messages.append({"role": "tool", "content": json.dumps(result)})
+    # ---------------- Store appointment ----------------
+    if tool_name == "book_appointment" and result.get("status") == "success":
+        session["context"]["last_appointment_id"] = result.get("appointment_id")
 
-        return run_agent(session, doctor_id, role, depth + 1)
+    # ---------------- Store availability ----------------
+    if tool_name == "check_availability":
+        session["context"]["availability"] = {
+            "doctor_id": args.get("doctor_id"),
+            "date": args.get("date"),
+            "slots": result.get("available_slots", [])
+        }
 
-    except Exception as e:
-        print("❌ PARSE ERROR:", e)
-        return "Something went wrong."
+    # ---------------- Append ----------------
+    messages.append({"role": "assistant", "content": json.dumps(parsed)})
+    messages.append({"role": "tool", "content": json.dumps(result)})
+
+    return run_agent(session, doctor_id, role, depth + 1)

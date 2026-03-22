@@ -3,30 +3,35 @@
 from ..db import SessionLocal
 from ..models import Appointment
 from datetime import datetime, time
+from ..services.email_service import send_email
+from ..notifications import add_notification
 
-def cancel_appointment(doctor_id: int, date: str, time: str):
+def cancel_appointment(appointment_id: int):
     db = SessionLocal()
 
     try:
-        date_obj = datetime.strptime(date, "%Y-%m-%d").date()
-        hour, minute = map(int, time.split(":"))
-
         appt = db.query(Appointment).filter(
-            Appointment.doctor_id == doctor_id,
-            Appointment.date == date_obj,
-            Appointment.time == time(hour, minute)
+            Appointment.id == appointment_id
         ).first()
 
         if not appt:
-            return {"status": "failed", "reason": "No appointment found"}
+            return {"status": "failed", "reason": "Appointment not found"}
 
         db.delete(appt)
         db.commit()
 
-        return {"status": "success", "message": "Appointment cancelled"}
+        send_email(
+            to_email=appt.patient_email,
+            subject="Appointment Cancelled",
+            body=f"Your appointment at {appt.time.strftime('%H:%M')} has been cancelled."
+        )
 
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
+        add_notification(
+            appt.doctor_id,
+            f"❌ Appointment cancelled ({appt.patient_name})"
+        )
+
+        return {"status": "success"}
 
     finally:
         db.close()
