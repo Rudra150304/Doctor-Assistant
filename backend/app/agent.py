@@ -51,7 +51,7 @@ def call_openrouter(chat_text):
                     {"role": "user", "content": chat_text}
                 ]
             },
-            timeout=15
+            timeout=30
         )
 
         data = response.json()
