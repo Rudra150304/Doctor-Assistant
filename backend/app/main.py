@@ -1,16 +1,14 @@
 # doctor-assistant/backend/app/main.py
 
-from fastapi import FastAPI, Body
-from .agent import run_agent
-from .db import Base, engine
-from .seed import run_seed
-from .auth import router as auth_router
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from .notifications import get_notifications
+from typing import Dict
+
+from .agent import run_agent
 
 app = FastAPI()
-app.include_router(auth_router)
 
+# ---------------- CORS ----------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,66 +16,56 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-Base.metadata.create_all(bind=engine)
 
-sessions = {}
+# ---------------- SESSION STORE ----------------
+sessions: Dict[str, Dict] = {}
 
-@app.on_event("startup")
-def startup():
-    run_seed()
 
-@app.get("/notifications/{doctor_id}")
-def fetch_notifications(doctor_id: int):
-    return get_notifications(doctor_id)
-
-@app.post("/chat")
-def chat(session_id: str, message: str, name: str = None, email: str = None):
-
-    # ---------------- Session Init ----------------
+def get_session(session_id: str):
     if session_id not in sessions:
         sessions[session_id] = {
             "messages": [],
             "context": {}
         }
+    return sessions[session_id]
 
-    session = sessions[session_id]
 
-    # ---------------- Store Patient Context ----------------
-    if name and email:
-        session.setdefault("context", {})
-        session["context"]["patient"] = {
-            "name": name,
-            "email": email
-        }
+# ---------------- CHAT ENDPOINT ----------------
+@app.post("/chat")
+def chat(
+    message: str = Query(...),
+    session_id: str = Query(...),
+    name: str = Query(None),
+    email: str = Query(None)
+):
+    session = get_session(session_id)
 
-    # ---------------- Extract Doctor ----------------
-    doctor_id = None
-    role = "patient"
-
-    if session_id.startswith("doc_"):
-        try:
-            doctor_id = int(session_id.split("_")[1])
-            role = "doctor"
-        except:
-            pass
-
-    # ---------------- Add User Message ----------------
+    # Store user message
     session["messages"].append({
         "role": "user",
         "content": message
     })
 
-    # ---------------- Run Agent ----------------
-    response = run_agent(
-        session=session,
-        doctor_id=doctor_id,
-        role=role
-    )
+    # Store patient info (optional)
+    if name and email:
+        session["context"]["patient"] = {
+            "name": name,
+            "email": email
+        }
 
-    # ---------------- Save Response ----------------
+    # Run agent
+    response = run_agent(session["messages"], session["context"])
+
+    # Store assistant response
     session["messages"].append({
         "role": "assistant",
         "content": response
     })
 
     return {"response": response}
+
+
+# ---------------- HEALTH CHECK ----------------
+@app.get("/")
+def root():
+    return {"status": "ok"}
