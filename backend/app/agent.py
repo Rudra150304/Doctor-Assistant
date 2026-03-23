@@ -23,7 +23,7 @@ def safe_parse_json(text):
 
         text = text.replace("json", "").strip()
 
-        match = re.search(r'\{.*\}', text, re.DOTALL)
+        match = re.search(r'\{.*?\}', text, re.DOTALL)
         if match:
             return json.loads(match.group())
 
@@ -68,6 +68,15 @@ def call_openrouter(chat_text):
         print("❌ OpenRouter ERROR:", e)
         return None
 
+def normalize_args(tool_name, args):
+    if tool_name == "book_appointment":
+        if "slot" in args:
+            args["time"] = args.pop("slot")
+
+    if "doctor" in args:
+        args["doctor_id"] = args.pop("doctor")
+
+    return args
 
 # ---------------- MAIN AGENT ----------------
 def run_agent(session, doctor_id=None, role=None, depth=0):
@@ -94,7 +103,10 @@ Email: {patient.get("email")}
 
     # ---------------- Tools ----------------
     tool_list = "\n".join(
-        [f"- {t['name']}({', '.join(t['input_schema'].keys())})" for t in list_tools()]
+        [
+            f"- {t['name']}({', '.join(t['parameters']['properties'].keys())})"
+            for t in list_tools()
+        ]
     )
 
     # ---------------- Role Prompt ----------------
@@ -211,12 +223,13 @@ Rules:
     if role == "doctor" and tool_name == "book_appointment":
         return "Doctors cannot book appointments."
 
-    if tool_name == "book_appointment" and "availability" not in context:
-        return "Please check availability first."
+    if tool_name == "book_appointment" and not context.get("availability"):
+        # fallback instead of blocking
+        args["date"] = args.get("date") or today
 
     # ---------------- Call Tool ----------------
+    args = normalize_args(tool_name, args)
     result = call_tool(tool_name, args).get("result")
-
     session.setdefault("context", {})
 
     # ---------------- Store appointment ----------------
@@ -233,7 +246,8 @@ Rules:
         session["context"]["last_doctor_id"] = args.get("doctor_id")
 
     # ---------------- Append ----------------
-    messages.append({"role": "assistant", "content": json.dumps(parsed)})
+    if "final" in parsed:
+        messages.append({"role": "assistant", "content": parsed["final"]})
     messages.append({"role": "tool", "content": json.dumps(result)})
 
     return run_agent(session, doctor_id, role, depth + 1)
