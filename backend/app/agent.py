@@ -36,8 +36,16 @@ def call_openrouter(chat_text):
             },
             json={
                 "model": "openai/gpt-4o-mini",
+                "temperature": 0,  # 🔥 critical for agents
                 "messages": [
-                    {"role": "user", "content": chat_text}
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": user_conversation
+                    }
                 ]
             },
             timeout=20
@@ -52,7 +60,9 @@ def call_openrouter(chat_text):
         data = response.json()
 
         if "choices" in data:
-            return data["choices"][0]["message"]["content"]
+            content = data["choices"][0]["message"]["content"]
+            print("🤖 RAW LLM:", content)  # 🔥 debug visibility
+            return content
 
         print("❌ Unexpected response:", data)
         return None
@@ -60,7 +70,6 @@ def call_openrouter(chat_text):
     except Exception as e:
         print("❌ OpenRouter EXCEPTION:", e)
         return None
-
 
 # ---------------- ARG NORMALIZER ----------------
 def normalize_args(tool_name, args):
@@ -154,8 +163,8 @@ STRICT RULES:
 - ALWAYS include ALL required arguments for tools
 - If user asks about stats → include "query"
 - If user asks to book → include "date" and "time"
-- Tool format: {"tool": "...", "args": {...}}
-- Final format: {"final": "..."}
+- Tool format: {{"tool": "...", "args": {{}}}}
+- Final format: {{"final" : "..."}}
 """
 
     # ---------------- Build Chat ----------------
@@ -186,7 +195,6 @@ STRICT RULES:
                 (m["content"] for m in reversed(messages) if m["role"] == "user"),
                 ""
             ).lower()
-
             # simple intent extraction
             if "today" in last_user_msg:
                 args["query"] = "today"
@@ -201,7 +209,6 @@ STRICT RULES:
     
     # ---------------- AUTO-FILL BOOKING ARGS ----------------
     if tool_name == "book_appointment":
-
         last_user_msg = next(
             (m["content"] for m in reversed(messages) if m["role"] == "user"),
             ""
@@ -263,7 +270,6 @@ STRICT RULES:
     # ---------------- STORE CONTEXT ----------------
     if tool_name == "check_availability" and status == "success":
         data = result.get("data") or {}
-
         context["availability"] = {
             "doctor_id": data.get("doctor_id"),
             "date": data.get("date"),
@@ -279,19 +285,15 @@ STRICT RULES:
     # ---------------- RESPONSE HANDLING ----------------
     if status == "success":
         data = result.get("data") or {}
-
         # Availability
         if "available_slots" in data:
             slots = data["available_slots"]
-
             if not slots:
                 return "No slots available."
-
             last_user_msg = next(
                 (m["content"] for m in reversed(messages) if m["role"] == "user"),
                 ""
             ).lower()
-
             if any(word in last_user_msg for word in ["next", "earliest"]):
                 return f"Next available slot is {slots[0]}"
 
