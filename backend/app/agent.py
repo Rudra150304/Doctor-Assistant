@@ -197,7 +197,26 @@ STRICT RULES:
                 args["query"] = "total"
             else:
                 args["query"] = last_user_msg
+    
+    # ---------------- AUTO-FILL BOOKING ARGS ----------------
+    if tool_name == "book_appointment":
 
+        last_user_msg = next(
+            (m["content"] for m in reversed(messages) if m["role"] == "user"),
+            ""
+        ).lower()
+        # Extract time (HH:MM)
+        time_match = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", last_user_msg)
+        if time_match and not args.get("time"):
+            args["time"] = time_match.group()
+
+        # Extract date
+        if "tomorrow" in last_user_msg and not args.get("date"):
+            args["date"] = str(today + timedelta(days=1))
+
+        elif "today" in last_user_msg and not args.get("date"):
+            args["date"] = str(today)
+    
     # ---------------- VALIDATION ----------------
     if not tool_name or tool_name not in tool_names:
         return "Sorry, I couldn't process that request."
