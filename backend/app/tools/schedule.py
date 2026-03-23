@@ -19,7 +19,13 @@ def get_schedule(doctor_id: int, date: str = None):
         ).order_by(Appointment.time).all()
 
         if not appts:
-            return {"result": f"No appointments scheduled for {date_obj}."}
+            return {
+                "status": "success",
+                "data": {
+                    "schedule": []
+                },
+                "message": f"No appointments scheduled for {date_obj}"
+            }
 
         schedule = [
             f"{a.time.strftime('%H:%M')} - {a.patient_name}"
@@ -27,7 +33,19 @@ def get_schedule(doctor_id: int, date: str = None):
         ]
 
         return {
-            "result": f"Schedule for {date_obj}:\n" + "\n".join(schedule)
+            "status": "success",
+            "data": {
+                "schedule": schedule,
+                "date": str(date_obj)
+            },
+            "message": "Schedule fetched successfully"
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "data": None,
+            "message": str(e)
         }
 
     finally:

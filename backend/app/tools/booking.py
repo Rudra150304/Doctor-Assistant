@@ -12,7 +12,11 @@ def book_appointment(doctor_id: int, patient_name: str, patient_email: str, date
 
     try:
         if time not in AVAILABLE_SLOTS:
-            return {"status": "failed", "reason": "Invalid time slot"}
+            return {
+                "status": "failed",
+                "data": None,
+                "message": "Invalid time slot"
+            }
 
         date_obj = datetime.strptime(date, "%Y-%m-%d").date()
 
@@ -22,7 +26,7 @@ def book_appointment(doctor_id: int, patient_name: str, patient_email: str, date
             event_file = create_event(doctor_id, date, time)
 
             send_email(
-                to_email= patient_email,
+                to_email=patient_email,
                 subject="Appointment Confirmed",
                 body=f"Dr. {doctor_id}, Date {date}, Time {time}"
             )
@@ -34,17 +38,28 @@ def book_appointment(doctor_id: int, patient_name: str, patient_email: str, date
 
             return {
                 "status": "success",
-                "doctor_id": doctor_id,
-                "appointment_id": result.get("appointment_id"),
-                "date": date,
-                "time": time,
-                "calendar_file": event_file
+                "data": {
+                    "appointment_id": result.get("appointment_id"),
+                    "doctor_id": doctor_id,
+                    "date": date,
+                    "time": time,
+                    "calendar_file": event_file
+                },
+                "message": "Appointment booked successfully"
             }
 
-        return result
+        return {
+            "status": "failed",
+            "data": None,
+            "message": result.get("reason", "Booking failed")
+        }
 
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        return {
+            "status": "error",
+            "data": None,
+            "message": str(e)
+        }
 
     finally:
         db.close()

@@ -15,7 +15,11 @@ def cancel_appointment(appointment_id: int):
         ).first()
 
         if not appt:
-            return {"status": "failed", "reason": "Appointment not found"}
+            return {
+                "status": "failed",
+                "data": None,
+                "message": "Appointment not found"
+            }
 
         db.delete(appt)
         db.commit()
@@ -31,7 +35,20 @@ def cancel_appointment(appointment_id: int):
             f"❌ Appointment cancelled ({appt.patient_name})"
         )
 
-        return {"status": "success"}
+        return {
+            "status": "success",
+            "data": {
+                "appointment_id": appointment_id
+            },
+            "message": "Appointment cancelled successfully"
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "data": None,
+            "message": str(e)
+        }
 
     finally:
         db.close()

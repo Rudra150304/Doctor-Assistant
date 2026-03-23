@@ -13,13 +13,21 @@ def check_availability(doctor_id: int, date: str):
         slots = get_available_slots(db, doctor_id, date_obj)
 
         return {
-            "doctor_id": doctor_id,
-            "date": date,
-            "available_slots": slots
+            "status": "success",
+            "data": {
+                "doctor_id": doctor_id,
+                "date": date,
+                "available_slots": slots
+            },
+            "message": "Slots fetched successfully"
         }
 
     except Exception as e:
-        return {"error": str(e)}
+        return {
+            "status": "error",
+            "message": str(e),
+            "data": None
+        }
 
     finally:
         db.close()

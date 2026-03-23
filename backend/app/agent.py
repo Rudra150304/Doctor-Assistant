@@ -1,4 +1,5 @@
 # doctor-assistant/backend/app/agent.py
+
 import json
 import os
 import re
@@ -72,6 +73,21 @@ def normalize_args(tool_name, args):
 
     return args
 
+
+# ---------------- ARG FILTER (NEW 🔥) ----------------
+def filter_args(tool_name, args, tools):
+    """
+    Keeps only allowed args based on tool schema.
+    Prevents unexpected keyword crashes.
+    """
+    tool_schema = next((t for t in tools if t["name"] == tool_name), None)
+
+    if not tool_schema:
+        return {}
+
+    allowed = tool_schema["parameters"]["properties"].keys()
+
+    return {k: v for k, v in args.items() if k in allowed}
 
 # ---------------- MAIN AGENT ----------------
 def run_agent(session, doctor_id=None, role=None):
@@ -163,26 +179,32 @@ STRICT RULES:
 
     # ---------------- VALIDATION ----------------
     if not tool_name or tool_name not in tool_names:
-        print("⚠️ Invalid tool from LLM:", tool_name)
         return "Sorry, I couldn't process that request."
 
-    # ---------------- Context Fix ----------------
+    # ---------------- NORMALIZE ----------------
+    args = normalize_args(tool_name, args)
+
+    # ---------------- CONTEXT INJECTION ----------------
     if not args.get("doctor_id"):
         args["doctor_id"] = doctor_id or context.get("last_doctor_id")
 
-    if not args.get("date"):
-        args["date"] = context.get("availability", {}).get("date") or str(today)
+    TOOLS_REQUIRING_DATE = ["check_availability", "book_appointment", "get_schedule"]
+
+    if tool_name in TOOLS_REQUIRING_DATE:
+        if not args.get("date"):
+            args["date"] = context.get("availability", {}).get("date") or str(today)
 
     if tool_name == "book_appointment":
         patient = context.get("patient", {})
         args["patient_name"] = patient.get("name", "User")
         args["patient_email"] = patient.get("email", "test@mail.com")
 
-    args = normalize_args(tool_name, args)
+    # ---------------- FILTER ARGS ----------------
+    args = filter_args(tool_name, args, tools)
 
     print("🛠 TOOL:", tool_name, args)
 
-    # ---------------- Call Tool ----------------
+    # ---------------- CALL TOOL ----------------
     tool_response = call_tool(tool_name, args)
     result = tool_response.get("result") if tool_response else None
 
@@ -192,40 +214,62 @@ STRICT RULES:
     if not isinstance(result, dict):
         return "Something went wrong. Please try again."
 
-    if result.get("status") == "error":
-        return "Something went wrong while processing your request."
+    status = result.get("status")
+
+    if status == "error":
+        return "Something went wrong. Please try again."
 
     # ---------------- STORE CONTEXT ----------------
-    if tool_name == "check_availability":
+    if tool_name == "check_availability" and status == "success":
+        data = result.get("data") or {}
+
         context["availability"] = {
-            "doctor_id": args["doctor_id"],
-            "date": args["date"],
-            "slots": result.get("available_slots", [])
+            "doctor_id": data.get("doctor_id"),
+            "date": data.get("date"),
+            "slots": data.get("available_slots", [])
         }
-        context["last_doctor_id"] = args["doctor_id"]
+        context["last_doctor_id"] = data.get("doctor_id")
 
-    if tool_name == "book_appointment" and result.get("status") == "success":
-        context["last_appointment_id"] = result.get("appointment_id")
-        return f"Appointment booked for {args['time']} on {args['date']}."
+    if tool_name == "book_appointment" and status == "success":
+        data = result.get("data") or {}
+        context["last_appointment_id"] = data.get("appointment_id")
+        return f"Appointment booked for {data.get('time')} on {data.get('date')}."
 
-    # ---------------- SMART RESPONSE ----------------
-    if "available_slots" in result:
-        slots = result["available_slots"]
+    # ---------------- RESPONSE HANDLING ----------------
+    if status == "success":
+        data = result.get("data") or {}
 
-        if not slots:
-            return "No slots available."
+        # Availability
+        if "available_slots" in data:
+            slots = data["available_slots"]
 
-        last_user_msg = session["messages"][-1]["content"].lower()
+            if not slots:
+                return "No slots available."
 
-        if any(word in last_user_msg for word in ["next", "earliest"]):
-            return f"Next available slot is {slots[0]}"
+            last_user_msg = next(
+                (m["content"] for m in reversed(messages) if m["role"] == "user"),
+                ""
+            ).lower()
 
-        return f"Available slots: {', '.join(slots)}"
+            if any(word in last_user_msg for word in ["next", "earliest"]):
+                return f"Next available slot is {slots[0]}"
 
-    if "result" in result:
-        return result["result"]
+            return f"Available slots: {', '.join(slots)}"
 
-    if result.get("status") == "failed":
-        return result.get("reason", "Action failed.")
+        # Stats / generic text
+        if "text" in data:
+            return data["text"]
+
+        # Schedule
+        if "schedule" in data:
+            if not data["schedule"]:
+                return result["message"]
+
+            return "\n".join(data["schedule"])
+
+        return result.get("message", "Done.")
+
+    if status == "failed":
+        return result.get("message", "Action failed.")
 
     return "Task completed."

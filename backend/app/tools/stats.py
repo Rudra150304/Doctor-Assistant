@@ -20,24 +20,42 @@ def get_stats(query: str, doctor_id: int = None):
 
         if any(x in q for x in ["yesterday", "last day"]):
             count = query_db.filter(Appointment.date == yesterday).count()
-            return {"result": f"You had {count} patients yesterday."}
+            text = f"You had {count} patients yesterday."
 
-        if any(x in q for x in ["today", "now"]):
+        elif any(x in q for x in ["today", "now"]):
             count = query_db.filter(Appointment.date == today).count()
-            return {"result": f"You have {count} appointments today."}
+            text = f"You have {count} appointments today."
 
-        if "tomorrow" in q:
+        elif "tomorrow" in q:
             count = query_db.filter(Appointment.date == tomorrow).count()
-            return {"result": f"You have {count} appointments tomorrow."}
+            text = f"You have {count} appointments tomorrow."
 
-        if "total" in q:
+        elif "total" in q:
             count = query_db.count()
-            return {"result": f"You have {count} total appointments."}
+            text = f"You have {count} total appointments."
 
-        return {"result": "Query not understood."}
+        else:
+            return {
+                "status": "failed",
+                "data": None,
+                "message": "Query not understood"
+            }
 
-    except Exception:
-        return {"result": "Error fetching statistics."}
+        return {
+            "status": "success",
+            "data": {
+                "count": count,
+                "text": text
+            },
+            "message": "Stats fetched successfully"
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "data": None,
+            "message": str(e)
+        }
 
     finally:
         db.close()
