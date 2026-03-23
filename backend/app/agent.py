@@ -26,7 +26,7 @@ def safe_parse_json(text):
 
 
 # ---------------- OPENROUTER CALL ----------------
-def call_openrouter(chat_text):
+def call_openrouter(messages):
     try:
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -37,16 +37,7 @@ def call_openrouter(chat_text):
             json={
                 "model": "openai/gpt-4o-mini",
                 "temperature": 0,  # 🔥 critical for agents
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": system_prompt
-                    },
-                    {
-                        "role": "user",
-                        "content": user_conversation
-                    }
-                ]
+                "messages": messages
             },
             timeout=20
         )
@@ -167,13 +158,25 @@ STRICT RULES:
 - Final format: {{"final" : "..."}}
 """
 
-    # ---------------- Build Chat ----------------
-    chat_text = system_prompt + "\n\n"
+    # ---------------- BUILD MESSAGES ----------------
+
+    conversation_text = ""
     for msg in messages:
-        chat_text += f"{msg['role']}: {msg['content']}\n"
+        conversation_text += f"{msg['role']}: {msg['content']}\n"
+
+    llm_messages = [
+        {
+            "role": "system",
+            "content": system_prompt
+        },
+        {
+            "role": "user",
+            "content": conversation_text
+        }
+    ]
 
     # ---------------- Call LLM ----------------
-    text = call_openrouter(chat_text)
+    text = call_openrouter(llm_messages)
 
     if not text:
         return "AI unavailable. Try again."
