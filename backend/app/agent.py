@@ -1,7 +1,7 @@
 # doctor-assistant/backend/app/agent.py
-
 import json
 import os
+import re
 from datetime import datetime, timedelta
 import requests
 from dotenv import load_dotenv
@@ -15,27 +15,13 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 # ---------------- SAFE JSON PARSER ----------------
 def safe_parse_json(text):
     try:
-        if "```" in text:
-            text = text.split("```")[1]
-
-        text = text.replace("json", "").strip()
-
-        try:
-            return json.loads(text)
-        except:
-            pass
-
-        start = text.find("{")
-        end = text.rfind("}")
-
-        if start != -1 and end != -1:
-            return json.loads(text[start:end+1])
-
-        return {"final": text}
-
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+        return {"final": text.strip()}
     except Exception:
-        print("⚠️ JSON PARSE FAILED. RAW:", text)
-        return {"final": text}
+        print("⚠️ JSON PARSE FAILED:", text)
+        return {"final": text.strip()}
 
 
 # ---------------- OPENROUTER CALL ----------------
@@ -53,19 +39,25 @@ def call_openrouter(chat_text):
                     {"role": "user", "content": chat_text}
                 ]
             },
-            timeout=30
+            timeout=20
         )
 
+        print("🔍 STATUS:", response.status_code)
+
+        if response.status_code != 200:
+            print("❌ OpenRouter ERROR:", response.text)
+            return None
+
         data = response.json()
-        print("🔍 RAW RESPONSE:", data)
 
         if "choices" in data:
             return data["choices"][0]["message"]["content"]
 
+        print("❌ Unexpected response:", data)
         return None
 
     except Exception as e:
-        print("❌ OpenRouter ERROR:", e)
+        print("❌ OpenRouter EXCEPTION:", e)
         return None
 
 
@@ -82,11 +74,7 @@ def normalize_args(tool_name, args):
 
 
 # ---------------- MAIN AGENT ----------------
-def run_agent(session, doctor_id=None, role=None, depth=0):
-
-    # 🔥 HARD STOP
-    if depth > 2:
-        return "Something went wrong. Please try again."
+def run_agent(session, doctor_id=None, role=None):
 
     messages = session["messages"]
     context = session.get("context", {})
@@ -106,7 +94,9 @@ Email: {patient.get("email")}
     tomorrow = today + timedelta(days=1)
 
     # ---------------- Tools ----------------
-    tool_list = "\n".join([f"- {t['name']}" for t in list_tools()])
+    tools = list_tools()
+    tool_names = [t["name"] for t in tools]
+    tool_list = "\n".join([f"- {name}" for name in tool_names])
 
     # ---------------- Prompt ----------------
     if role == "doctor":
@@ -142,12 +132,13 @@ Ahuja=1, Sharma=2, Mehta=3, Gupta=4
 Today = {today}
 Tomorrow = {tomorrow}
 
-Rules:
+STRICT RULES:
 - Return ONLY JSON
 - ONE object only
 - Tool format: {{"tool": "...", "args": {{}}}}
 - Final format: {{"final": "..."}}
-- If task is completed → RETURN FINAL
+- DO NOT hallucinate tools
+- If unsure → return final
 """
 
     # ---------------- Build Chat ----------------
@@ -159,7 +150,7 @@ Rules:
     text = call_openrouter(chat_text)
 
     if not text:
-        return "AI is busy. Try again."
+        return "AI unavailable. Try again."
 
     parsed = safe_parse_json(text)
 
@@ -169,6 +160,11 @@ Rules:
 
     tool_name = parsed.get("tool")
     args = parsed.get("args", {})
+
+    # ---------------- VALIDATION ----------------
+    if not tool_name or tool_name not in tool_names:
+        print("⚠️ Invalid tool from LLM:", tool_name)
+        return "Sorry, I couldn't process that request."
 
     # ---------------- Context Fix ----------------
     if not args.get("doctor_id"):
@@ -184,8 +180,12 @@ Rules:
 
     args = normalize_args(tool_name, args)
 
+    print("🛠 TOOL:", tool_name, args)
+
     # ---------------- Call Tool ----------------
     result = call_tool(tool_name, args).get("result")
+
+    print("📦 RESULT:", result)
 
     # ---------------- STORE CONTEXT ----------------
     if tool_name == "check_availability":
@@ -199,14 +199,17 @@ Rules:
     if tool_name == "book_appointment" and result.get("status") == "success":
         context["last_appointment_id"] = result.get("appointment_id")
 
-        # 🔥 FORCE FINAL AFTER BOOKING
         return f"Appointment booked for {args['time']} on {args['date']}."
 
-    # ---------------- Append ----------------
-    messages.append({"role": "tool", "content": json.dumps(result)})
+    # ---------------- FINAL RETURN (NO RECURSION) ----------------
+    if isinstance(result, dict):
+        if "result" in result:
+            return result["result"]
 
-    # 🔥 Prevent infinite loop
-    if depth >= 2:
-        return "Task completed."
+        if "available_slots" in result:
+            return f"Available slots: {', '.join(result['available_slots'])}"
 
-    return run_agent(session, doctor_id, role, depth + 1)
+        if result.get("status") == "failed":
+            return result.get("reason", "Action failed.")
+
+    return str(result)
