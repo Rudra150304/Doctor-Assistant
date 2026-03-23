@@ -35,7 +35,7 @@ def call_openrouter(chat_text):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "openrouter/free",
+                "model": "openai/gpt-4o-mini",
                 "messages": [
                     {"role": "user", "content": chat_text}
                 ]
@@ -149,12 +149,13 @@ Today = {today}
 Tomorrow = {tomorrow}
 
 STRICT RULES:
-- Return ONLY JSON
-- ONE object only
-- Tool format: {{"tool": "...", "args": {{}}}}
-- Final format: {{"final": "..."}}
-- DO NOT hallucinate tools
-- If unsure → return final
+- ALWAYS return valid JSON
+- NEVER return text outside JSON
+- ALWAYS include ALL required arguments for tools
+- If user asks about stats → include "query"
+- If user asks to book → include "date" and "time"
+- Tool format: {"tool": "...", "args": {...}}
+- Final format: {"final": "..."}
 """
 
     # ---------------- Build Chat ----------------
