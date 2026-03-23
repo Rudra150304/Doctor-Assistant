@@ -1,37 +1,50 @@
 # doctor-assistant/backend/app/services/email_service.py
-import smtplib
-import os
-from email.mime.text import MIMEText
-from dotenv import load_dotenv
 
-load_dotenv()
+import requests
+import os
+
+
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+FROM_EMAIL = os.getenv("FROM_EMAIL")  # your verified sender
+
 
 def send_email(to_email: str, subject: str, body: str):
     try:
-        SMTP_HOST = "sandbox.smtp.mailtrap.io"
-        SMTP_PORT = 587
-
-        SMTP_USER = os.getenv("MAILTRAP_USER")
-        SMTP_PASS = os.getenv("MAILTRAP_PASS")
-
-        if not SMTP_USER or not SMTP_PASS:
-            print("⚠️ SMTP not configured, skipping email")
+        if not SENDGRID_API_KEY or not FROM_EMAIL:
+            print("⚠️ SendGrid not configured")
             return {"status": "skipped"}
 
-        msg = MIMEText(body)
-        msg["Subject"] = subject
-        msg["From"] = "noreply@doctorassistant.com"
-        msg["To"] = to_email
+        url = "https://api.sendgrid.com/v3/mail/send"
 
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASS)
-        server.send_message(msg)
-        server.quit()
+        headers = {
+            "Authorization": f"Bearer {SENDGRID_API_KEY}",
+            "Content-Type": "application/json"
+        }
 
-        print("📧 Email sent via SMTP")
+        data = {
+            "personalizations": [
+                {
+                    "to": [{"email": to_email}]
+                }
+            ],
+            "from": {"email": FROM_EMAIL},
+            "subject": subject,
+            "content": [
+                {
+                    "type": "text/plain",
+                    "value": body
+                }
+            ]
+        }
 
-        return {"status": "sent"}
+        response = requests.post(url, headers=headers, json=data)
+
+        print("📧 SENDGRID:", response.status_code, response.text)
+
+        if response.status_code == 202:
+            return {"status": "sent"}
+
+        return {"status": "failed", "error": response.text}
 
     except Exception as e:
         print("❌ Email error:", e)
