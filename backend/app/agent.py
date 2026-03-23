@@ -16,23 +16,30 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 # ---------------- SAFE JSON PARSER ----------------
 def safe_parse_json(text):
     try:
+        # Remove code blocks
         if "```" in text:
-            parts = text.split("```")
-            if len(parts) > 1:
-                text = parts[1]
+            text = text.split("```")[1]
 
         text = text.replace("json", "").strip()
 
-        match = re.search(r'\{.*?\}', text, re.DOTALL)
-        if match:
-            return json.loads(match.group())
+        # 🔥 Try direct parse first
+        try:
+            return json.loads(text)
+        except:
+            pass
+
+        # 🔥 Fallback: find first valid JSON object
+        start = text.find("{")
+        end = text.rfind("}")
+
+        if start != -1 and end != -1:
+            return json.loads(text[start:end+1])
 
         return {"final": text}
 
     except Exception:
         print("⚠️ JSON PARSE FAILED. RAW:", text)
         return {"final": text}
-
 
 # ---------------- OPENROUTER CALL ----------------
 def call_openrouter(chat_text):
