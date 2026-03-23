@@ -4,7 +4,6 @@ from .booking import book_appointment
 from .stats import get_stats
 from .cancel import cancel_appointment
 from .schedule import get_schedule
-from .next_available_slot import next_available_slot
 
 TOOLS = [
     {
@@ -32,17 +31,6 @@ TOOLS = [
                 "time": {"type": "string"}
             },
             "required": ["doctor_id", "patient_name", "patient_email", "date", "time"]
-        }
-    },
-    {
-        "name": "next_available_slot",
-        "description": "Get next available slot for today",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "doctor_id": {"type": "integer"}
-            },
-            "required": ["doctor_id"]
         }
     },
     {
@@ -87,6 +75,5 @@ TOOL_MAP = {
     "book_appointment": book_appointment,
     "cancel_appointment": cancel_appointment,
     "get_schedule": get_schedule,
-    "next_available_slot": next_available_slot,
     "get_stats": get_stats
 }

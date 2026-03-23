@@ -183,9 +183,17 @@ STRICT RULES:
     print("🛠 TOOL:", tool_name, args)
 
     # ---------------- Call Tool ----------------
-    result = call_tool(tool_name, args).get("result")
+    tool_response = call_tool(tool_name, args)
+    result = tool_response.get("result") if tool_response else None
 
     print("📦 RESULT:", result)
+
+    # ---------------- FAIL SAFE ----------------
+    if not isinstance(result, dict):
+        return "Something went wrong. Please try again."
+
+    if result.get("status") == "error":
+        return "Something went wrong while processing your request."
 
     # ---------------- STORE CONTEXT ----------------
     if tool_name == "check_availability":
@@ -198,18 +206,26 @@ STRICT RULES:
 
     if tool_name == "book_appointment" and result.get("status") == "success":
         context["last_appointment_id"] = result.get("appointment_id")
-
         return f"Appointment booked for {args['time']} on {args['date']}."
 
-    # ---------------- FINAL RETURN (NO RECURSION) ----------------
-    if isinstance(result, dict):
-        if "result" in result:
-            return result["result"]
+    # ---------------- SMART RESPONSE ----------------
+    if "available_slots" in result:
+        slots = result["available_slots"]
 
-        if "available_slots" in result:
-            return f"Available slots: {', '.join(result['available_slots'])}"
+        if not slots:
+            return "No slots available."
 
-        if result.get("status") == "failed":
-            return result.get("reason", "Action failed.")
+        last_user_msg = session["messages"][-1]["content"].lower()
 
-    return str(result)
+        if any(word in last_user_msg for word in ["next", "earliest"]):
+            return f"Next available slot is {slots[0]}"
+
+        return f"Available slots: {', '.join(slots)}"
+
+    if "result" in result:
+        return result["result"]
+
+    if result.get("status") == "failed":
+        return result.get("reason", "Action failed.")
+
+    return "Task completed."
