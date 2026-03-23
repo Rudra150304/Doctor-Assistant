@@ -23,18 +23,29 @@ def book_appointment(doctor_id: int, patient_name: str, patient_email: str, date
         result = book_slot(db, doctor_id, patient_name, patient_email, date_obj, time)
 
         if result.get("status") == "success":
-            event_file = create_event(doctor_id, date, time)
 
-            send_email(
-                to_email=patient_email,
-                subject="Appointment Confirmed",
-                body=f"Dr. {doctor_id}, Date {date}, Time {time}"
-            )
+            # 🔥 DO NOT BLOCK RESPONSE
+            try:
+                create_event(doctor_id, date, time)
+            except Exception as e:
+                print("⚠️ Calendar failed:", e)
 
-            add_notification(
-                doctor_id,
-                f"🆕 Appointment at {time} with {patient_name}"
-            )
+            try:
+                send_email(
+                    to_email=patient_email,
+                    subject="Appointment Confirmed",
+                    body=f"Dr. {doctor_id}, Date {date}, Time {time}"
+                )
+            except Exception as e:
+                print("⚠️ Email failed:", e)
+
+            try:
+                add_notification(
+                    doctor_id,
+                    f"🆕 Appointment at {time} with {patient_name}"
+                )
+            except Exception as e:
+                print("⚠️ Notification failed:", e)
 
             return {
                 "status": "success",
@@ -42,12 +53,12 @@ def book_appointment(doctor_id: int, patient_name: str, patient_email: str, date
                     "appointment_id": result.get("appointment_id"),
                     "doctor_id": doctor_id,
                     "date": date,
-                    "time": time,
-                    "calendar_file": event_file
+                    "time": time
                 },
                 "message": "Appointment booked successfully"
             }
 
+        # 🔥 THIS WAS MISSING
         return {
             "status": "failed",
             "data": None,

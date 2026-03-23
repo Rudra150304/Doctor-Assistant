@@ -199,17 +199,13 @@ STRICT RULES:
                 ""
             ).lower()
             # simple intent extraction
-            if "today" in last_user_msg:
-                args["query"] = "today"
-            elif "yesterday" in last_user_msg:
-                args["query"] = "yesterday"
-            elif "tomorrow" in last_user_msg:
-                args["query"] = "tomorrow"
-            elif "total" in last_user_msg:
-                args["query"] = "total"
-            else:
-                args["query"] = last_user_msg
-    
+            if tool_name == "get_stats":
+                last_user_msg = next(
+                    (m["content"] for m in reversed(messages) if m["role"] == "user"),
+                    ""
+                )
+                args["query"] = last_user_msg 
+
     # ---------------- AUTO-FILL BOOKING ARGS ----------------
     if tool_name == "book_appointment":
         last_user_msg = next(

@@ -18,11 +18,12 @@ def get_stats(query: str, doctor_id: int = None):
         if doctor_id:
             query_db = query_db.filter(Appointment.doctor_id == doctor_id)
 
-        if any(x in q for x in ["yesterday", "last day"]):
+        # 🔥 KEY FIX: detect time intent from full sentence
+        if "yesterday" in q:
             count = query_db.filter(Appointment.date == yesterday).count()
             text = f"You had {count} patients yesterday."
 
-        elif any(x in q for x in ["today", "now"]):
+        elif "today" in q:
             count = query_db.filter(Appointment.date == today).count()
             text = f"You have {count} appointments today."
 
@@ -35,11 +36,9 @@ def get_stats(query: str, doctor_id: int = None):
             text = f"You have {count} total appointments."
 
         else:
-            return {
-                "status": "failed",
-                "data": None,
-                "message": "Query not understood"
-            }
+            # 🔥 fallback: assume today if unclear
+            count = query_db.filter(Appointment.date == today).count()
+            text = f"You have {count} appointments today."
 
         return {
             "status": "success",
