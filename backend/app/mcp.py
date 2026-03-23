@@ -2,16 +2,11 @@
 
 from typing import Dict
 from .tools.registry import TOOL_MAP
+from .tools.registry import TOOLS
 
 
 def list_tools():
-    return [
-        {
-            "name": name,
-            "input_schema": {}
-        }
-        for name in TOOL_MAP.keys()
-    ]
+    return TOOLS
 
 
 def call_tool(tool_name: str, args: Dict):
