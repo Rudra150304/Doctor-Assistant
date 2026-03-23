@@ -1,8 +1,35 @@
 # doctor-assistant/backend/app/agent.py
 
-import json
-from .mcp import list_tools, execute_tool
-from .llm import call_openrouter  # your existing function
+import requests
+import os
+
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+def call_openrouter(messages):
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "openai/gpt-4o-mini",
+                "messages": messages
+            },
+            timeout=20
+        )
+
+        if response.status_code != 200:
+            print("❌ OpenRouter ERROR:", response.text)
+            return None
+
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        print("❌ OpenRouter EXCEPTION:", e)
+        return None
 
 
 def run_agent(messages, context):
