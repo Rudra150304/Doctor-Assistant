@@ -7,12 +7,7 @@ An AI-powered full-stack application that enables patients to book appointments 
 
 ## 🚀 Live Demo
 
-*(Add after deployment)*
-
-Frontend: https://your-app.vercel.app
-Backend: https://your-app.onrender.com
-
-> ⚠️ Note: Backend may take ~10–20 seconds to wake up (Render free tier)
+Frontend: [https://your-app.vercel.app](https://doctor-assistant-95spgrr6o-rudra150304s-projects.vercel.app/)
 
 ---
 
@@ -167,7 +162,11 @@ npm run dev
 
 ## 📸 Screenshots
 
-*(Add after deployment)*
+<img width="1920" height="1043" alt="image" src="https://github.com/user-attachments/assets/4bbb7f13-db86-4842-aa8e-85bf8e6fe47c" />
+<img width="1920" height="1043" alt="image" src="https://github.com/user-attachments/assets/eb34151d-ab91-423d-8f97-791d4da72a84" />
+<img width="1920" height="1043" alt="image" src="https://github.com/user-attachments/assets/5c0a8fd2-a724-4bb3-9d1e-15e2a6c2fd6f" />
+<img width="1920" height="1043" alt="image" src="https://github.com/user-attachments/assets/e4de31fe-433c-4783-9b01-ce85655247a8" />
+<img width="1920" height="1043" alt="image" src="https://github.com/user-attachments/assets/a2bc5f31-1b36-47f0-9855-89029050dbc0" />
 
 ---
 
