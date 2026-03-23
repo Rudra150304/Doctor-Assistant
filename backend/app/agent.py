@@ -177,6 +177,27 @@ STRICT RULES:
     tool_name = parsed.get("tool")
     args = parsed.get("args", {})
 
+    # ---------------- AUTO-FILL MISSING ARGS ----------------
+
+    if tool_name == "get_stats":
+        if not args.get("query"):
+            last_user_msg = next(
+                (m["content"] for m in reversed(messages) if m["role"] == "user"),
+                ""
+            ).lower()
+
+            # simple intent extraction
+            if "today" in last_user_msg:
+                args["query"] = "today"
+            elif "yesterday" in last_user_msg:
+                args["query"] = "yesterday"
+            elif "tomorrow" in last_user_msg:
+                args["query"] = "tomorrow"
+            elif "total" in last_user_msg:
+                args["query"] = "total"
+            else:
+                args["query"] = last_user_msg
+
     # ---------------- VALIDATION ----------------
     if not tool_name or tool_name not in tool_names:
         return "Sorry, I couldn't process that request."
