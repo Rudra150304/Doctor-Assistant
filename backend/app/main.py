@@ -5,8 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
 
 from .agent import run_agent
+from .auth import router as auth_router
 
 app = FastAPI()
+
+app.include_router(auth_router)
 
 # ---------------- CORS ----------------
 app.add_middleware(
