@@ -55,7 +55,7 @@ GOALS:
 
 RULES:
 - NEVER ask for patient details
-- Use tools for all actions
+- ALWAYS use tools for actions
 """
 
 
@@ -71,7 +71,7 @@ GOALS:
 
 RULES:
 - NEVER ask for doctor_id
-- Use tools for all queries
+- ALWAYS use tools
 """
 
 
@@ -80,11 +80,30 @@ def run_agent(messages, context):
     tools = list_tools()
     today = datetime.now().strftime("%Y-%m-%d")
 
+    # 🔥 DOCTOR MAPPING (CRITICAL FIX)
+    doctor_map = """
+Doctors:
+- Dr. Ahuja → doctor_id = 1
+- Dr. Sharma → doctor_id = 2
+- Dr. Mehta → doctor_id = 3
+- Dr. Gupta → doctor_id = 4
+"""
+
     # ---------------- SYSTEM PROMPT ----------------
     system_prompt = f"""
 You are an AI medical assistant.
 
 Today's date is {today}.
+
+-----------------------------------
+DOCTOR MAPPING (IMPORTANT)
+-----------------------------------
+{doctor_map}
+
+RULE:
+- ALWAYS map doctor names to correct doctor_id
+- NEVER assume doctor_id randomly
+- If doctor not specified → ask user
 
 -----------------------------------
 CRITICAL RULE
@@ -99,17 +118,17 @@ If user asks anything about:
 YOU MUST CALL A TOOL.
 
 -----------------------------------
-RULES
------------------------------------
-- ALWAYS return valid JSON
-- NEVER return plain text outside JSON
-- NEVER hallucinate
-
------------------------------------
 DATE RULES
 -----------------------------------
 - "today" → {today}
 - "tomorrow" → next date
+
+-----------------------------------
+RULES
+-----------------------------------
+- ALWAYS return valid JSON ONLY
+- NO extra text outside JSON
+- NEVER hallucinate
 
 -----------------------------------
 TOOLS
@@ -177,23 +196,23 @@ OR
         tool_name = parsed["tool"]
         args = parsed.get("args", {})
 
-        # 🔥 FIX: ALWAYS override doctor_id
+        # 🔥 SAFETY: override doctor_id ONLY if doctor logged in
         if context.get("doctor_id"):
             args["doctor_id"] = context["doctor_id"]
 
-        # Inject patient info ONLY for booking
+        # Inject patient info ONLY when needed
         if tool_name == "book_appointment" and context.get("patient"):
             args["patient_name"] = context["patient"]["name"]
             args["patient_email"] = context["patient"]["email"]
 
-        # Inject appointment_id for cancel
+        # Cancel fallback
         if tool_name == "cancel_appointment":
             if "appointment_id" not in args and context.get("last_appointment_id"):
                 args["appointment_id"] = context["last_appointment_id"]
 
         parsed["args"] = args
 
-        print("FINAL ARGS:", args)  # 🔍 debug
+        print("FINAL ARGS:", args)
 
         tool_result = execute_tool(parsed)
 
