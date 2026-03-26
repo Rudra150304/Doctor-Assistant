@@ -206,9 +206,8 @@ OR
             args["patient_email"] = context["patient"]["email"]
 
         # Cancel fallback
-        if tool_name == "cancel_appointment":
-            if "appointment_id" not in args and context.get("last_appointment_id"):
-                args["appointment_id"] = context["last_appointment_id"]
+        if tool_name == "cancel_appointment" and context.get("last_appointment_id"):
+            args["appointment_id"] = context["last_appointment_id"]
 
         parsed["args"] = args
 
