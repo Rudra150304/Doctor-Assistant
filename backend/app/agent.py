@@ -2,6 +2,8 @@
 
 import requests
 import os
+import json
+from .mcp import list_tools, execute_tool
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
