@@ -55,7 +55,7 @@ GOALS:
 
 RULES:
 - NEVER ask for patient details
-- NEVER include patient_name or email in tool args (handled automatically)
+- NEVER include patient_name or email in tool args unless necessary
 - Use tools for all actions
 """
 
@@ -73,7 +73,6 @@ GOALS:
 
 RULES:
 - NEVER ask for doctor_id
-- NEVER include doctor_id in tool args (handled automatically)
 - Use tools for all queries
 """
 
@@ -101,8 +100,8 @@ If the user asks for:
 
 YOU MUST call a tool.
 
-DO NOT return "final".
-DO NOT explain.
+DO NOT refuse.
+DO NOT say "I cannot".
 ONLY return a tool call.
 
 -----------------------------------
@@ -125,13 +124,6 @@ TOOLS
 {json.dumps(tools)}
 
 -----------------------------------
-ARGUMENT RULES
------------------------------------
-- DO NOT include doctor_id
-- DO NOT include patient_name or email
-- These are injected automatically
-
------------------------------------
 OUTPUT FORMAT (STRICT)
 -----------------------------------
 
@@ -145,11 +137,6 @@ OR
 {{
   "final": "response"
 }}
-
------------------------------------
-FINAL INSTRUCTION
------------------------------------
-Be decisive. Always prefer tools.
 """
 
     # ---------------- ROLE PROMPT ----------------
@@ -166,7 +153,6 @@ Be decisive. Always prefer tools.
     for msg in messages:
         conversation += f"{msg['role']}: {msg['content']}\n"
 
-    # ---------------- LLM CALL ----------------
     llm_messages = [
         {"role": "system", "content": system_prompt},
         {"role": "system", "content": role_prompt},
@@ -180,7 +166,7 @@ Be decisive. Always prefer tools.
     if not response_text:
         return "LLM failed to respond."
 
-    # ---------------- FIX JSON (IMPORTANT) ----------------
+    # ---------------- FIX JSON (handles 'Tool call:' issue) ----------------
     try:
         match = re.search(r"\{.*\}", response_text, re.DOTALL)
         if match:
@@ -199,15 +185,24 @@ Be decisive. Always prefer tools.
     # ---------------- TOOL EXECUTION ----------------
     if "tool" in parsed:
         args = parsed.get("args", {})
+        tool_name = parsed["tool"]
 
-        # Inject doctor_id
-        if context.get("doctor_id"):
+        # ---- Inject doctor_id ONLY if missing ----
+        if context.get("doctor_id") and "doctor_id" not in args:
             args["doctor_id"] = context["doctor_id"]
 
-        # Inject patient info
-        if context.get("patient"):
-            args["patient_name"] = context["patient"]["name"]
-            args["patient_email"] = context["patient"]["email"]
+        # ---- Inject patient info ONLY for booking ----
+        if tool_name == "book_appointment" and context.get("patient"):
+            if "patient_name" not in args:
+                args["patient_name"] = context["patient"]["name"]
+
+            if "patient_email" not in args:
+                args["patient_email"] = context["patient"]["email"]
+
+        # ---- Inject appointment_id for cancel ----
+        if tool_name == "cancel_appointment":
+            if "appointment_id" not in args and context.get("last_appointment_id"):
+                args["appointment_id"] = context["last_appointment_id"]
 
         parsed["args"] = args
 
@@ -215,8 +210,8 @@ Be decisive. Always prefer tools.
 
         print("📦 TOOL RESULT:", tool_result)
 
-        # Store appointment
-        if parsed["tool"] == "book_appointment" and tool_result.get("status") == "success":
+        # Store appointment ID
+        if tool_name == "book_appointment" and tool_result.get("status") == "success":
             context["last_appointment_id"] = tool_result["data"].get("appointment_id")
 
         # ---------------- CLEAN OUTPUT ----------------
