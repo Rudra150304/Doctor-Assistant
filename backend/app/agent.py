@@ -4,8 +4,11 @@ import requests
 import os
 import json
 from .mcp import list_tools, execute_tool
+from datetime import datetime
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+today = datetime.now().strftime("%Y-%m-%d")
 
 def call_openrouter(messages):
     try:
@@ -46,6 +49,13 @@ def run_agent(messages, context):
 
     system_prompt = f"""
 You are a medical assistant AI.
+
+Today's date is {today}.
+
+When user says:
+- "today" → use today's date
+- "tomorrow" → next day
+...
 
 You have access to tools.
 
