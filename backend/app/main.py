@@ -67,6 +67,9 @@ def chat(
     if doctor_id:
         session["context"]["doctor_id"] = doctor_id
 
+    if session_id.startswith("doc_"):
+        session["context"]["doctor_id"] = int(session_id.split("_")[1])
+
     response = run_agent(session["messages"], session["context"])
 
     session["messages"].append({
