@@ -55,7 +55,6 @@ GOALS:
 
 RULES:
 - NEVER ask for patient details
-- NEVER include patient_name or email in tool args unless necessary
 - Use tools for all actions
 """
 
@@ -64,8 +63,7 @@ def build_doctor_prompt(context):
     return f"""
 You are assisting a DOCTOR.
 
-Doctor details:
-- Doctor ID: {context['doctor_id']}
+Doctor ID: {context['doctor_id']}
 
 GOALS:
 - View schedule
@@ -89,34 +87,29 @@ You are an AI medical assistant.
 Today's date is {today}.
 
 -----------------------------------
-CRITICAL RULE (NON-NEGOTIABLE)
+CRITICAL RULE
 -----------------------------------
-If the user asks for:
+If user asks anything about:
 - availability
 - schedule
-- statistics
 - booking
 - cancellation
+- stats
 
-YOU MUST call a tool.
-
-DO NOT refuse.
-DO NOT say "I cannot".
-ONLY return a tool call.
+YOU MUST CALL A TOOL.
 
 -----------------------------------
-GENERAL RULES
+RULES
 -----------------------------------
 - ALWAYS return valid JSON
 - NEVER return plain text outside JSON
-- NEVER hallucinate data
+- NEVER hallucinate
 
 -----------------------------------
 DATE RULES
 -----------------------------------
 - "today" → {today}
 - "tomorrow" → next date
-- Always use YYYY-MM-DD
 
 -----------------------------------
 TOOLS
@@ -124,12 +117,11 @@ TOOLS
 {json.dumps(tools)}
 
 -----------------------------------
-OUTPUT FORMAT (STRICT)
+OUTPUT FORMAT
 -----------------------------------
-
 {{
   "tool": "tool_name",
-  "args": {{ ... }}
+  "args": {{}}
 }}
 
 OR
@@ -144,7 +136,6 @@ OR
 
     if context.get("doctor_id"):
         role_prompt = build_doctor_prompt(context)
-
     elif context.get("patient"):
         role_prompt = build_patient_prompt(context)
 
@@ -166,14 +157,13 @@ OR
     if not response_text:
         return "LLM failed to respond."
 
-    # ---------------- FIX JSON (handles 'Tool call:' issue) ----------------
+    # ---------------- PARSE JSON ----------------
     try:
         match = re.search(r"\{.*\}", response_text, re.DOTALL)
         if match:
             parsed = json.loads(match.group(0))
         else:
             raise ValueError("No JSON found")
-
     except Exception:
         print("❌ Invalid JSON:", response_text)
         return "Sorry, I couldn't understand that."
@@ -184,27 +174,26 @@ OR
 
     # ---------------- TOOL EXECUTION ----------------
     if "tool" in parsed:
-        args = parsed.get("args", {})
         tool_name = parsed["tool"]
+        args = parsed.get("args", {})
 
-        # ---- Inject doctor_id ONLY if missing ----
-        if context.get("doctor_id") and "doctor_id" not in args:
+        # 🔥 FIX: ALWAYS override doctor_id
+        if context.get("doctor_id"):
             args["doctor_id"] = context["doctor_id"]
 
-        # ---- Inject patient info ONLY for booking ----
+        # Inject patient info ONLY for booking
         if tool_name == "book_appointment" and context.get("patient"):
-            if "patient_name" not in args:
-                args["patient_name"] = context["patient"]["name"]
+            args["patient_name"] = context["patient"]["name"]
+            args["patient_email"] = context["patient"]["email"]
 
-            if "patient_email" not in args:
-                args["patient_email"] = context["patient"]["email"]
-
-        # ---- Inject appointment_id for cancel ----
+        # Inject appointment_id for cancel
         if tool_name == "cancel_appointment":
             if "appointment_id" not in args and context.get("last_appointment_id"):
                 args["appointment_id"] = context["last_appointment_id"]
 
         parsed["args"] = args
+
+        print("FINAL ARGS:", args)  # 🔍 debug
 
         tool_result = execute_tool(parsed)
 
@@ -214,7 +203,7 @@ OR
         if tool_name == "book_appointment" and tool_result.get("status") == "success":
             context["last_appointment_id"] = tool_result["data"].get("appointment_id")
 
-        # ---------------- CLEAN OUTPUT ----------------
+        # ---------------- RESPONSE ----------------
         if tool_result.get("status") == "success":
             data = tool_result.get("data", {})
 
