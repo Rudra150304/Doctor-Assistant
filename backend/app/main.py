@@ -46,27 +46,29 @@ def chat(
     message: str = Query(...),
     session_id: str = Query(...),
     name: str = Query(None),
-    email: str = Query(None)
+    email: str = Query(None),
+    doctor_id: int = Query(None)   # 👈 ADD THIS
 ):
     session = get_session(session_id)
 
-    # Store user message
     session["messages"].append({
         "role": "user",
         "content": message
     })
 
-    # Store patient info (optional)
+    # ✅ store patient
     if name and email:
         session["context"]["patient"] = {
             "name": name,
             "email": email
         }
 
-    # Run agent
+    # 🔥 IMPORTANT: store doctor_id
+    if doctor_id:
+        session["context"]["doctor_id"] = doctor_id
+
     response = run_agent(session["messages"], session["context"])
 
-    # Store assistant response
     session["messages"].append({
         "role": "assistant",
         "content": response
