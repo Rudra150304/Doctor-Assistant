@@ -3,6 +3,7 @@
 import requests
 import os
 import json
+import re
 from datetime import datetime
 
 from .mcp import list_tools, execute_tool
@@ -54,6 +55,7 @@ GOALS:
 
 RULES:
 - NEVER ask for patient details
+- NEVER include patient_name or email in tool args (handled automatically)
 - Use tools for all actions
 """
 
@@ -71,6 +73,7 @@ GOALS:
 
 RULES:
 - NEVER ask for doctor_id
+- NEVER include doctor_id in tool args (handled automatically)
 - Use tools for all queries
 """
 
@@ -87,20 +90,27 @@ You are an AI medical assistant.
 Today's date is {today}.
 
 -----------------------------------
-YOUR JOB
+CRITICAL RULE (NON-NEGOTIABLE)
 -----------------------------------
-- Understand user intent
-- Decide if a tool is needed
-- Call tools when required
-- Return final answers when no tool needed
+If the user asks for:
+- availability
+- schedule
+- statistics
+- booking
+- cancellation
+
+YOU MUST call a tool.
+
+DO NOT return "final".
+DO NOT explain.
+ONLY return a tool call.
 
 -----------------------------------
-RULES
+GENERAL RULES
 -----------------------------------
 - ALWAYS return valid JSON
 - NEVER return plain text outside JSON
 - NEVER hallucinate data
-- ALWAYS use tools for real-world data
 
 -----------------------------------
 DATE RULES
@@ -115,41 +125,31 @@ TOOLS
 {json.dumps(tools)}
 
 -----------------------------------
-WHEN TO USE TOOLS
+ARGUMENT RULES
 -----------------------------------
-availability → check_availability  
-booking → book_appointment  
-cancel → cancel_appointment  
-schedule → get_schedule  
-stats → get_stats  
+- DO NOT include doctor_id
+- DO NOT include patient_name or email
+- These are injected automatically
 
 -----------------------------------
 OUTPUT FORMAT (STRICT)
 -----------------------------------
 
-Tool call:
 {{
   "tool": "tool_name",
   "args": {{ ... }}
 }}
 
-Final response:
+OR
+
 {{
   "final": "response"
 }}
 
 -----------------------------------
-IMPORTANT
------------------------------------
-- DO NOT ask for missing IDs
-- DO NOT invent data
-- ALWAYS prefer tool usage
-- DO NOT say "I cannot"
-
------------------------------------
 FINAL INSTRUCTION
 -----------------------------------
-Be decisive. Use tools.
+Be decisive. Always prefer tools.
 """
 
     # ---------------- ROLE PROMPT ----------------
@@ -163,7 +163,6 @@ Be decisive. Use tools.
 
     # ---------------- BUILD CONVERSATION ----------------
     conversation = ""
-
     for msg in messages:
         conversation += f"{msg['role']}: {msg['content']}\n"
 
@@ -181,9 +180,14 @@ Be decisive. Use tools.
     if not response_text:
         return "LLM failed to respond."
 
-    # ---------------- PARSE RESPONSE ----------------
+    # ---------------- FIX JSON (IMPORTANT) ----------------
     try:
-        parsed = json.loads(response_text)
+        match = re.search(r"\{.*\}", response_text, re.DOTALL)
+        if match:
+            parsed = json.loads(match.group(0))
+        else:
+            raise ValueError("No JSON found")
+
     except Exception:
         print("❌ Invalid JSON:", response_text)
         return "Sorry, I couldn't understand that."
@@ -196,11 +200,11 @@ Be decisive. Use tools.
     if "tool" in parsed:
         args = parsed.get("args", {})
 
-        # Inject doctor_id automatically
+        # Inject doctor_id
         if context.get("doctor_id"):
             args["doctor_id"] = context["doctor_id"]
 
-        # Inject patient automatically
+        # Inject patient info
         if context.get("patient"):
             args["patient_name"] = context["patient"]["name"]
             args["patient_email"] = context["patient"]["email"]
@@ -211,7 +215,7 @@ Be decisive. Use tools.
 
         print("📦 TOOL RESULT:", tool_result)
 
-        # Save appointment ID
+        # Store appointment
         if parsed["tool"] == "book_appointment" and tool_result.get("status") == "success":
             context["last_appointment_id"] = tool_result["data"].get("appointment_id")
 
@@ -219,15 +223,12 @@ Be decisive. Use tools.
         if tool_result.get("status") == "success":
             data = tool_result.get("data", {})
 
-            # stats
             if "text" in data:
                 return data["text"]
 
-            # availability
             if "available_slots" in data:
                 return "Available slots: " + ", ".join(data["available_slots"])
 
-            # schedule
             if "schedule" in data:
                 if not data["schedule"]:
                     return "No appointments scheduled."
