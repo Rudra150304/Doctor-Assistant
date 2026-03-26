@@ -7,6 +7,8 @@ from typing import Dict
 from .agent import run_agent
 from .auth import router as auth_router
 
+from .notifications import get_notifications
+
 app = FastAPI()
 
 app.include_router(auth_router)
@@ -31,6 +33,11 @@ def get_session(session_id: str):
             "context": {}
         }
     return sessions[session_id]
+
+#------------------ Notifications----------------
+@app.get("/notifications/{doctor_id}")
+def fetch_notifications(doctor_id: int):
+    return get_notifications(doctor_id)
 
 
 # ---------------- CHAT ENDPOINT ----------------
